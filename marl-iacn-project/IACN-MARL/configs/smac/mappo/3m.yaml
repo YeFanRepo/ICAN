@@ -1,0 +1,84 @@
+# ==============================================================================
+# MAPPO 多智能体强化学习配置文件（适配 StarCraft2 SMAC-3m 场景）
+# 用途：单机CPU训练，8个并行环境，100万步训练流程
+# 适配框架：xuance（需确保框架版本与配置字段兼容）
+# ==============================================================================
+
+# ================================== 框架核心必填配置 ==================================
+agent: "MAPPO"                  # 多智能体PPO算法（Multi-Agent PPO）
+env_name: "StarCraft2"          # 环境名称（星际争霸2）
+env_id: "3m"                    # SMAC场景ID（3个陆战队员对抗3个陆战队员）
+env_seed: 1                     # 环境随机种子（保证实验可复现）
+device: "cpu"                   # 训练设备（CPU，有GPU可改为cuda:0）
+distributed_training: False     # 禁用分布式训练（单机模式）
+render: False                   # 关闭环境渲染（CPU训练推荐，节省资源）
+logger: "tensorboard"           # 日志工具（TensorBoard，记录训练指标）
+vectorize: "Subproc_StarCraft2" # 并行环境类型（子进程模式，适配星际2多环境交互）
+runner: "RunnerStarCraft2"      # 星际2专用运行器（控制训练流程与环境交互）
+
+# ================================== 日志与模型配置 ==================================
+log_dir: "../../logs/mappo/"    # MAPPO日志保存路径（与QMIX区分，避免冲突）
+model_dir: "../../models/mappo/"# MAPPO模型保存路径（与QMIX区分）
+log_interval: 1000                 # 日志打印间隔（每1000步打印一次训练状态）
+save_interval: 50000               # 模型保存间隔（每5万步保存一次模型参数）
+eval_interval: 10000               # 评估间隔（每1万步进行一次性能评估）
+test_episode: 16                   # 每次评估的episode数量（取平均作为评估结果）
+
+# ================================== 网络结构配置 ==================================
+learner: "MAPPO_Clip_Learner"      # MAPPO专用学习器（带裁剪的PPO更新规则）
+policy: "Categorical_MAAC_Policy"  # 策略网络类型（分类动作空间的多智能体策略）
+representation: "Basic_RNN"        # 状态表示网络（基础循环网络，处理时序信息）
+
+# 循环网络配置（Basic_RNN）
+use_rnn: True                      # 启用循环神经网络（处理部分可观测环境）
+rnn: "GRU"                         # 循环网络类型（GRU，比LSTM参数更少，训练更稳定）
+N_recurrent_layers: 1              # 循环层数量（1层足以处理小规模场景）
+fc_hidden_sizes: [64, 64, 64]      # 全连接层维度（3层64维，提取状态特征）
+recurrent_hidden_size: 64          # 循环层隐藏维度（与全连接层维度保持一致）
+dropout: 0                         # 禁用dropout（小规模场景无需正则化，避免欠拟合）
+normalize: "LayerNorm"             # 归一化方式（层归一化，加速训练收敛）
+initialize: "orthogonal"           # 参数初始化方式（正交初始化，避免梯度消失/爆炸）
+gain: 0.01                         # 初始化增益（控制初始参数规模）
+
+# 策略网络结构（Actor-Critic 双网络）
+actor_hidden_size: []              # 演员网络隐藏层（复用fc_hidden_sizes，减少冗余配置）
+critic_hidden_size: []             # 评论家网络隐藏层（复用fc_hidden_sizes）
+activation: "relu"                 # 激活函数（ReLU，缓解梯度消失问题）
+use_parameter_sharing: True        # 智能体间共享参数（减少参数总量，提升泛化性）
+use_actions_mask: True             # 启用动作掩码（过滤无效动作，如攻击已死亡单位）
+
+# ================================== 训练超参数配置 ==================================
+seed: 1                            # 算法随机种子（与环境种子配合，保证实验可复现）
+parallels: 8                       # 并行环境数量（8个环境同时交互，加速经验收集）
+running_steps: 1000000             # 总训练步数（100万步，覆盖完整训练曲线）
+buffer_size: 128                   # 经验缓冲区大小（PPO中为单环境轨迹长度）
+n_epochs: 15                       # 每轮更新的训练epoch数（多次迭代提升样本利用率）
+n_minibatch: 1                     # 每个epoch的mini-batch数量（全量样本更新）
+learning_rate: 0.0007              # 学习率（7e-4，兼顾收敛速度与稳定性）
+weight_decay: 0                    # 权重衰减（禁用，小规模场景无需L2正则化）
+
+# PPO核心损失系数配置
+vf_coef: 1.0                       # 价值损失系数（平衡策略损失与价值损失）
+ent_coef: 0.01                     # 熵奖励系数（鼓励探索，避免过早收敛到次优策略）
+target_kl: 0.25                    # 目标KL散度（超过此值则早停，避免策略更新幅度过大）
+clip_range: 0.2                    # PPO裁剪范围（限制新旧策略比值，稳定训练）
+clip_type: 1                       # 梯度裁剪类型（1: 范数裁剪，防止梯度爆炸）
+gamma: 0.99                        # 折扣因子（未来奖励的衰减权重）
+
+# ================================== 训练技巧配置 ==================================
+use_linear_lr_decay: False         # 禁用学习率线性衰减（固定学习率更简单）
+end_factor_lr_decay: 0.5           # 衰减最终因子（启用线性衰减时生效）
+use_global_state: False            # 不使用全局状态计算价值（仅用智能体局部观测）
+use_value_clip: True               # 启用价值裁剪（限制价值函数更新幅度，稳定训练）
+value_clip_range: 0.2              # 价值裁剪范围（与策略裁剪范围保持一致）
+use_value_norm: True               # 启用价值归一化（标准化回报，加速收敛）
+use_huber_loss: True               # 启用Huber损失（替代MSE，对异常值更稳健）
+huber_delta: 10.0                  # Huber损失阈值（超过此值用L1损失，否则用L2）
+use_advnorm: True                  # 启用优势归一化（标准化优势函数，提升稳定性）
+use_gae: True                      # 启用GAE（广义优势估计，更准确估计优势）
+gae_lambda: 0.95                   # GAE折扣因子（控制时序依赖衰减速度）
+use_grad_clip: True                # 启用梯度裁剪（防止梯度爆炸）
+grad_clip_norm: 10.0               # 梯度裁剪范数（限制梯度向量L2范数）
+
+# ================================== 其他辅助配置 ==================================
+fps: 15                            # 环境帧率（仅渲染时生效，控制画面刷新速度）

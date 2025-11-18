@@ -1,0 +1,72 @@
+# ================================== 框架核心必填配置 ==================================
+agent: "QMIX"                # 多智能体算法名称
+env_name: "StarCraft2"       # 环境名称（星际争霸2）
+env_id: "3m"                 # SMAC场景ID（3个陆战队员）
+env_seed: 1                  # 环境随机种子
+device: "cpu"                # 训练设备（CPU，有GPU可改为cuda:0）
+distributed_training: False  # 禁用分布式训练（单机模式）
+render: False                # 关闭环境渲染（CPU训练推荐）
+logger: "tensorboard"        # 日志工具（TensorBoard，用于可视化训练过程）
+vectorize: "Subproc_StarCraft2"  # 并行环境类型（子进程模式，适配星际2）
+runner: "RunnerStarCraft2"   # 星际2专用运行器（负责训练流程控制）
+
+# ================================== 日志与模型配置 ==================================
+log_dir: "../../logs/qmix/"    # 日志保存路径
+model_dir: "../../models/qmix/"# 模型保存路径
+log_interval: 1000               # 日志打印间隔（每1000步打印一次）
+save_interval: 50000             # 模型保存间隔（每5万步保存一次）
+eval_interval: 10000             # 评估间隔（每1万步评估一次）
+test_episode: 16                 # 每次评估的episode数量
+
+# ================================== 网络结构配置 ==================================
+learner: "QMIX_Learner"          # QMIX专用学习器
+policy: "Mixing_Q_network"       # 混合Q网络策略
+representation: "Basic_RNN"      # 状态表示网络（基础循环网络）
+
+# 循环网络配置（Basic_RNN）
+use_rnn: True                    # 启用循环神经网络
+rnn: "GRU"                       # 循环网络类型（GRU，替代LSTM更高效）
+N_recurrent_layers: 1            # 循环层数量
+fc_hidden_sizes: [64]            # 全连接层维度
+recurrent_hidden_size: 64        # 循环层隐藏维度
+dropout: 0                       # 禁用dropout（小规模场景无需正则化）
+normalize: "LayerNorm"           # 层归一化（加速训练收敛）
+initialize: "orthogonal"         # 参数正交初始化（避免梯度消失）
+gain: 0.01                       # 初始化增益
+
+# QMIX混合网络配置
+representation_hidden_size: [64] # 状态表示网络隐藏层维度
+q_hidden_size: [64]              # 智能体Q网络隐藏层维度
+hidden_dim_mixing_net: 32        # 混合网络隐藏层维度
+hidden_dim_hyper_net: 32         # 超网络隐藏层维度（用于生成混合网络参数）
+activation: "relu"               # 激活函数（ReLU）
+use_parameter_sharing: True      # 智能体间共享网络参数（减少参数数量）
+use_actions_mask: True           # 启用动作掩码（过滤无效动作，如超出地图边界）
+
+# ================================== 训练超参数配置 ==================================
+seed: 1                          # 算法随机种子（保证实验可复现）
+parallels: 8                     # 并行环境数量（8个环境同时交互）
+running_steps: 1000000           # 总训练步数（100万步）
+buffer_size: 5000                # 经验回放缓冲区大小
+batch_size: 32                   # 训练批次大小
+learning_rate: 0.0007            # 学习率（7e-4）
+gamma: 0.99                      # 折扣因子（未来奖励权重）
+double_q: True                   # 启用Double Q-Learning（减轻过估计）
+tau: 0.01                        # 目标网络软更新系数
+
+# 探索策略配置（ε-贪婪）
+start_greedy: 1.0                # 初始探索率（100%随机动作）
+end_greedy: 0.05                 # 最终探索率（5%随机动作）
+decay_step_greedy: 50000         # 探索率衰减步数（5万步衰减至最终值）
+
+# 训练流程配置
+start_training: 1000             # 积累1000步经验后开始训练
+n_epochs: 8                      # 每次交互后的训练轮数
+sync_frequency: 200              # 目标网络同步频率（每200步更新一次）
+use_grad_clip: False             # 禁用梯度裁剪
+grad_clip_norm: 0.5              # 梯度裁剪阈值（禁用时无效）
+
+# ================================== 其他辅助配置 ==================================
+fps: 15                          # 环境帧率（仅渲染时生效）
+use_linear_lr_decay: False       # 禁用学习率线性衰减
+end_factor_lr_decay: 0.5         # 衰减最终因子（禁用时无效）

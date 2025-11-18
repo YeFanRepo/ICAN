@@ -1,0 +1,93 @@
+# ==============================================================================
+# TarMAC 多智能体强化学习配置文件（适配 StarCraft2 SMAC-3m 场景）
+# 用途：单机GPU训练（默认cuda:0），8个并行环境，100万步训练流程
+# 适配框架：xuance（深度学习工具链为PyTorch）
+# ==============================================================================
+
+# ================================== 框架核心必填配置 ==================================
+dl_toolbox: "torch"                # 深度学习工具链（可选：torch/mindspore/tensorlayer）
+project_name: "XuanCe_Benchmark"   # 项目名称（用于日志与实验管理）
+agent: "TarMAC"                    # 多智能体算法名称（目标导向通信网络算法）
+env_name: "StarCraft2"             # 环境名称（星际争霸2）
+env_id: "3m"                       # SMAC场景ID（3个陆战队员对抗场景）
+env_seed: 1                        # 环境随机种子（保证实验可复现）
+device: "cuda:0"                   # 训练设备（GPU，无GPU可改为cpu）
+distributed_training: False        # 禁用分布式训练（单机模式）
+master_port: '12355'               # 分布式训练主端口（禁用时仅为占位）
+test_mode: False                   # 关闭测试模式（启用训练模式）
+render: True                       # 启用环境渲染（可视化训练过程）
+render_mode: 'rgb_array'           # 渲染模式（rgb_array：输出图像数组；human：弹出窗口）
+logger: "tensorboard"              # 日志工具（可选：tensorboard/wandb）
+wandb_user_name: "your_user_name"  # Wandb用户名（使用wandb时需填写）
+vectorize: "Subproc_StarCraft2"    # 并行环境类型（子进程模式，适配星际2）
+
+# ================================== 日志与模型配置 ==================================
+log_dir: "../../logs/tarmac/"          # TarMAC日志保存路径
+model_dir: "../../models/tarmac/"      # TarMAC模型保存路径
+log_interval: 1000                 # 日志打印间隔（每1000步打印训练状态）
+save_interval: 50000               # 模型保存间隔（每5万步保存一次参数）
+eval_interval: 10000               # 评估间隔（每1万步进行一次性能评估）
+test_episode: 16                   # 每次评估的episode数量（取平均值作为结果）
+
+# ================================== 网络结构配置 ==================================
+learner: "TarMac_Learner"          # TarMAC专用学习器（含目标导向通信机制）
+policy: "TarMAC_Policy"            # 策略网络类型（带目标导向通信模块）
+representation: "Basic_RNN"        # 状态表示网络（基础循环网络，处理时序信息）
+
+# 循环网络配置（Basic_RNN）
+use_rnn: True                      # 启用循环神经网络（处理部分可观测环境）
+rnn: "LSTM"                        # 循环网络类型（LSTM，捕捉长时序依赖）
+N_recurrent_layers: 1              # 循环层数量（1层足以处理该场景时序信息）
+fc_hidden_sizes: [64, 64, 64]      # 全连接层维度（3层64维，提取状态特征）
+recurrent_hidden_size: 64          # 循环层隐藏维度（与全连接层维度保持一致）
+dropout: 0                         # 禁用dropout（小规模场景无需正则化）
+normalize: "LayerNorm"             # 归一化方式（层归一化，加速训练收敛）
+initialize: "orthogonal"           # 参数初始化方式（正交初始化，避免梯度问题）
+gain: 0.01                         # 初始化增益（控制初始参数规模）
+
+# 策略网络结构（含目标导向通信模块）
+gate_hidden_size: []               # 门控网络隐藏层（空列表表示复用基础网络维度）
+actor_hidden_size: []              # 演员网络隐藏层（复用fc_hidden_sizes，减少冗余）
+critic_hidden_size: []             # 评论家网络隐藏层（复用fc_hidden_sizes）
+activation: "relu"                 # 激活函数（ReLU，缓解梯度消失）
+use_parameter_sharing: True        # 智能体间共享参数（减少参数总量，提升泛化性）
+use_actions_mask: True             # 启用动作掩码（过滤无效动作，如攻击已死亡单位）
+comm_passes: 1                     # 通信轮次（智能体间目标导向消息编码次数）
+use_gate: True                     # 启用门控机制（动态调节通信强度）
+
+# ================================== 训练超参数配置 ==================================
+seed: 1                            # 算法随机种子（与环境种子配合，保证可复现）
+parallels: 8                       # 并行环境数量（8个环境同时交互，加速经验收集）
+running_steps: 1000000             # 总训练步数（100万步，适配3m场景复杂度）
+buffer_size: 128                   # 经验缓冲区大小（PPO类算法中为单环境轨迹长度）
+n_epochs: 15                       # 每轮更新的训练epoch数（多次迭代提升样本利用率）
+n_minibatch: 1                     # 每个epoch的mini-batch数量（全量样本更新）
+learning_rate: 0.0007              # 学习率（7e-4，兼顾收敛速度与稳定性）
+weight_decay: 0                    # 权重衰减（禁用，小规模场景无需L2正则化）
+
+# 核心损失系数配置
+vf_coef: 1.0                       # 价值损失系数（平衡策略损失与价值损失）
+ent_coef: 0.01                     # 熵奖励系数（鼓励探索，避免过早收敛）
+target_kl: 0.25                    # 目标KL散度（超过此值则早停，避免策略更新幅度过大）
+clip_range: 0.2                    # PPO裁剪范围（限制新旧策略比值，稳定训练）
+clip_type: 1                       # 梯度裁剪类型（1: 范数裁剪，防止梯度爆炸）
+gamma: 0.99                        # 折扣因子（未来奖励的衰减权重）
+
+# ================================== 训练技巧配置 ==================================
+use_linear_lr_decay: True          # 启用学习率线性衰减（提升训练后期稳定性）
+end_factor_lr_decay: 0.5           # 衰减最终因子（学习率最终降至初始值的50%）
+lr_decay_steps: 2000               # 学习率衰减步数（每2000步衰减一次）
+use_global_state: False            # 不使用全局状态计算价值（仅用智能体局部观测）
+use_value_clip: True               # 启用价值裁剪（限制价值函数更新幅度，稳定训练）
+value_clip_range: 0.2              # 价值裁剪范围（与策略裁剪范围保持一致）
+use_value_norm: True               # 启用价值归一化（用滑动均值/方差标准化回报）
+use_huber_loss: True               # 启用Huber损失（替代MSE，对异常值更稳健）
+huber_delta: 10.0                  # Huber损失阈值（超过此值用L1损失，否则用L2）
+use_advnorm: True                  # 启用优势归一化（标准化优势函数，提升稳定性）
+use_gae: True                      # 启用GAE（广义优势估计，更准确估计优势）
+gae_lambda: 0.95                   # GAE折扣因子（控制时序依赖的衰减速度）
+use_grad_clip: True                # 启用梯度裁剪（防止梯度爆炸，保护训练稳定性）
+grad_clip_norm: 10.0               # 梯度裁剪范数（限制梯度向量的L2范数）
+
+# ================================== 其他辅助配置 ==================================
+fps: 30                            # 环境帧率（渲染时控制画面刷新速度，30帧更流畅）
