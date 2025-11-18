@@ -1,17 +1,14 @@
+# baselines/qmix/qmix.py（改造后）
 import argparse
 from xuance.common import get_configs
-from xuance.environment import REGISTRY_ENV
 from xuance.environment import make_envs
 from xuance.torch.agents import QMIX_Agents
 
-if __name__ == '__main__':
-
-    configs_dict = get_configs(file_dir="../../configs/smac/qmix/3m.yaml")
-    configs = argparse.Namespace(**configs_dict)
-    # REGISTRY_ENV[configs.env_name] = MyNewEnv
-
-    envs = make_envs(configs)  # Make parallel environments.
-    Agent = QMIX_Agents(config=configs, envs=envs)  # Create QMIX agents from XuanCe.
-    Agent.train(configs.running_steps // configs.parallels)  # Train the model for numerous steps.
-    Agent.save_model("final_train_model.pth")  # Save the model to model_dir.
-    Agent.finish()  # Finish the training.
+# 删掉原有的 if __name__ == '__main__': 入口代码
+# 新增：封装训练逻辑为函数，供 train 目录脚本调用
+def run_qmix(configs):
+    envs = make_envs(configs)
+    agent = QMIX_Agents(config=configs, envs=envs)
+    agent.train(configs.running_steps // configs.parallels)
+    agent.save_model("final_train_model.pth")
+    agent.finish()
