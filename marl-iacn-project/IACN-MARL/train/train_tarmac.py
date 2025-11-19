@@ -1,29 +1,67 @@
-# train/train_tarmac.py（训练入口，固定路径逻辑）
+# train/train_tarmac.py
 import os
 import sys
-import argparse  # 导入argparse，避免NameError
+import argparse
 
-# 强制添加项目根目录（IACN-MARL）到Python路径，确保能导入baselines模块
-root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(root_dir)
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT_DIR)
 
-# 导入baselines中的TarMAC核心训练函数
-from baselines.tarmac.tarmac import run_tarmac
-from xuance.common import get_configs
+try:
+    from baselines.tarmac.tarmac import run_tarmac
+    from xuance.common import get_configs
+    from utils.logger import Logger
+    from utils.model_saver import BestModelSaver
+
+    print("✓ 依赖导入成功")
+except ImportError as e:
+    print(f"✗ 导入失败: {e}")
+    sys.exit(1)
 
 if __name__ == '__main__':
-    # 配置文件路径：基于项目根目录（train的上级是根目录）
-    config_path = "../configs/smac/tarmac/3m.yaml"
-    # 转为绝对路径（避免运行目录影响，确保找到配置文件）
-    abs_config_path = os.path.join(root_dir, config_path.lstrip("../"))  # 移除../，用根目录拼接
+    config_file = os.path.join(ROOT_DIR, "configs", "smac", "tarmac", "3m.yaml")
 
-    # 读取配置文件
-    configs_dict = get_configs(file_dir=abs_config_path)
-    configs = argparse.Namespace(**configs_dict)
+    if not os.path.exists(config_file):
+        print("❌ 配置文件不存在!")
+        sys.exit(1)
 
-    # 强制统一日志/模型保存路径（覆盖配置文件中的相对路径，避免混乱）
-    configs.log_dir = os.path.join(root_dir, "logs/tarmac/")
-    configs.model_dir = os.path.join(root_dir, "models/tarmac/")
+    try:
+        configs_dict = get_configs(file_dir=config_file)
+        configs = argparse.Namespace(**configs_dict)
+        print("✓ 配置加载成功")
+    except Exception as e:
+        print(f"❌ 配置加载失败: {e}")
+        sys.exit(1)
 
-    # 调用TarMAC核心训练函数
-    run_tarmac(configs)
+    # 设置路径
+    configs.log_dir = os.path.join(ROOT_DIR, "logs", "tarmac")
+    configs.model_dir = os.path.join(ROOT_DIR, "models", "tarmac")
+    os.makedirs(configs.log_dir, exist_ok=True)
+    os.makedirs(configs.model_dir, exist_ok=True)
+
+    try:
+        logger = Logger(configs.log_dir, logger_type=configs.logger)
+        logger.save_config(configs)
+        print("✓ 日志器初始化成功")
+    except Exception as e:
+        print(f"❌ 日志器初始化失败: {e}")
+        sys.exit(1)
+
+    print("🚀 开始TarMAC训练...")
+
+    # 初始化最佳模型保存器
+    best_saver = BestModelSaver(configs.model_dir, "tarmac")
+
+    try:
+        run_tarmac(configs, best_saver=best_saver)
+        print("✓ TarMAC训练完成")
+    except Exception as e:
+        print(f"❌ TarMAC训练失败: {e}")
+        import traceback
+
+        traceback.print_exc()
+    finally:
+        logger.close()
+
+        if best_saver.best_model_path:
+            print(f"🏆 最佳模型: {best_saver.best_model_path}")
+            print(f"📊 最佳奖励: {best_saver.best_reward:.4f}")

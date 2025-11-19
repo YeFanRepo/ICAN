@@ -3,7 +3,7 @@ agent: "QMIX"                # 多智能体算法名称
 env_name: "StarCraft2"       # 环境名称（星际争霸2）
 env_id: "3m"                 # SMAC场景ID（3个陆战队员）
 env_seed: 1                  # 环境随机种子
-device: "cpu"                # 训练设备（CPU，有GPU可改为cuda:0）
+device: "cuda:0"                # 训练设备（CPU，有GPU可改为cuda:0）
 distributed_training: False  # 禁用分布式训练（单机模式）
 render: False                # 关闭环境渲染（CPU训练推荐）
 logger: "tensorboard"        # 日志工具（TensorBoard，用于可视化训练过程）

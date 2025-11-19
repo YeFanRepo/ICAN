@@ -1,15 +1,30 @@
-# baselines/mappo/mappo.py（改造后）
+# baselines/mappo/mappo.py
 import argparse
 from xuance.common import get_configs
 from xuance.environment import REGISTRY_ENV
 from xuance.environment import make_envs
 from xuance.torch.agents import MAPPO_Agents
 
-# 封装MAPPO训练逻辑为函数，供train目录调用
-def run_mappo(configs):
-    # REGISTRY_ENV[configs.env_name] = MyNewEnv  # 如需自定义环境，在这里添加
+
+def run_mappo(configs, best_saver=None):
+    # 创建环境
     envs = make_envs(configs)
-    agent = MAPPO_Agents(config=configs, envs=envs)  # 注意：变量名小写（PEP8规范）
+
+    # 创建agent
+    agent = MAPPO_Agents(config=configs, envs=envs)
+
+    # 训练
     agent.train(configs.running_steps // configs.parallels)
+
+    # 保存最终模型
     agent.save_model("final_train_model.pth")
+
+    # 如果有最佳模型保存器，保存最佳模型
+    if best_saver is not None:
+        # 这里需要获取训练过程中的最佳奖励
+        # 假设我们可以从agent或环境中获取
+        best_reward = getattr(agent, 'best_eval_reward', None)
+        if best_reward is not None:
+            best_saver.save_if_better(best_reward, agent)
+
     agent.finish()
